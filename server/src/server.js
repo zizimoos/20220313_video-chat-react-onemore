@@ -16,6 +16,16 @@ const io = new Server(server, {
 io.on("connection", (socket) => {
   console.log("someone connected", socket.id);
 
+  socket.on("join_room", (roomName, wellcomMessage) => {
+    console.log(`${socket.id} joined`, roomName);
+    socket.join(roomName);
+    wellcomMessage();
+    socket.to(roomName).emit("welcome", socket.id);
+  });
+  socket.on("offer", (offer, roomName) => {
+    socket.to(roomName).emit("offer", offer);
+  });
+
   socket.on("disconnection", () => {});
   socket.on("disconnect", () => {
     console.log("disconnected");
