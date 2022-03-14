@@ -85,13 +85,32 @@ function App() {
   const handleCameraChange = async (e) => {
     await getMedia(e.target.value);
   };
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    socket.emit("join_room", roomName, wellcomMessage);
+    await wellcomMessage();
+    socket.emit("join_room", roomName);
   };
   const wellcomMessage = async () => {
     setWelcome(true);
     await makeConnection();
+  };
+
+  const makeConnection = async () => {
+    myPeerConnection = new RTCPeerConnection();
+    myPeerConnection.addEventListener("icecandidate", handleIceCandidate);
+    myPeerConnection.addEventListener("addstream", handleAddStream);
+    await myStream
+      .getTracks()
+      .forEach((track) => myPeerConnection.addTrack(track, myStream));
+  };
+  const handleAddStream = (data) => {
+    console.log("handleAddStream", data.stream);
+    console.log("myStream", myStream);
+    otherVideo.current.srcObject = data.stream;
+  };
+
+  const handleIceCandidate = (data) => {
+    socket.emit("ice", data.candidate, roomName);
   };
 
   const getMedia = async (deviceId) => {
@@ -124,26 +143,23 @@ function App() {
   socket.on("welcome", async (id) => {
     console.log(`${id} joined`);
     const offer = await myPeerConnection.createOffer();
-    await myPeerConnection.setLocalDescription(offer);
-    console.log(`sent the offer`);
+    myPeerConnection.setLocalDescription(offer);
     socket.emit("offer", offer, roomName);
   });
 
-  const makeConnection = () => {
-    myPeerConnection = new RTCPeerConnection();
-    myStream
-      .getTracks()
-      .forEach((track) => myPeerConnection.addTrack(track, myStream));
-  };
-
   socket.on("offer", async (offer) => {
-    console.log(`received the offer`);
-    await myPeerConnection.setRemoteDescription(offer);
-
+    myPeerConnection.setRemoteDescription(offer);
     const answer = await myPeerConnection.createAnswer();
-    await myPeerConnection.setLocalDescription(answer);
-    console.log(answer);
-    socket.emit("answer", answer);
+    myPeerConnection.setLocalDescription(answer);
+    socket.emit("answer", answer, roomName);
+  });
+
+  socket.on("answer", async (answer) => {
+    await myPeerConnection.setRemoteDescription(answer);
+  });
+
+  socket.on("ice", (ice) => {
+    myPeerConnection.addIceCandidate(ice);
   });
 
   return (
